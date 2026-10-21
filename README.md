@@ -1,10 +1,10 @@
-# UniOne Go net/http 1.1.3
+# UniOne Go net/http
 
-Web API 1.90
-
-Quickstart guide: [Send emails with Go](https://docs.unione.io/en/send-with-go) · Docs for LLMs: [llms.txt](https://docs.unione.io/llms.txt) · [API reference](https://docs.unione.io/en/web-api-ref)
+[![Go net/http](https://pkg.go.dev/badge/github.com/unione-repo/unione-nethttp.svg)](https://pkg.go.dev/github.com/unione-repo/unione-nethttp) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Go net/http integration of the [UniOne Go SDK](https://github.com/unione-repo/unione-go-sdk) (`github.com/unione-repo/unione-go-sdk`): the API client in the request context (net/http middleware), a webhook endpoint with signature check.
+
+[API reference](https://docs.unione.io/en/web-api-ref) · Docs for LLMs: [llms.txt](https://docs.unione.io/llms.txt)
 
 ## Install
 
@@ -14,22 +14,13 @@ go get github.com/unione-repo/unione-nethttp
 
 Requirements: Go 1.21+.
 
-## Get an API key
+## Configuration
 
-1. Sign up at [cp.unione.io](https://cp.unione.io/en/user/registration/).
-2. Copy your API key from [Settings → Security → API](https://cp.unione.io/en/settings/security/api).
-3. Put it in an environment variable:
+Get an API key in the [control panel](https://cp.unione.io/en/settings/security/api) and keep it in the environment, never in code:
 
 ```bash
 export UNIONE_API_KEY="your-api-key"
 ```
-
-The package reads it from `UNIONE_API_KEY` (see the configuration below).
-
-> **Server-side only.** Use this package in backend code: API routes, server functions, workers.
-> Never ship the API key to a browser or a mobile app, and never commit it.
-
-## Configuration
 
 Settings are read from the environment by default:
 
@@ -37,6 +28,8 @@ Settings are read from the environment by default:
 UNIONE_API_KEY=YOUR_API_KEY
 UNIONE_HOST=us1.unione.io
 ```
+
+`us1.unione.io` in the example is for an account on another datacenter; without the host setting the package uses `api.unione.io`.
 
 | Option | Environment variable | Default | Description |
 |---|---|---|---|
@@ -47,149 +40,6 @@ UNIONE_HOST=us1.unione.io
 | `WebhookPath` | `UNIONE_WEBHOOK_PATH` | `/unione/webhook` | Path of the webhook endpoint. |
 
 `ConfigFromEnv()` reads the variables; a `Config` can also be filled in code. `UNIONE_TIMEOUT` is in seconds, `Config.Timeout` is a `time.Duration`.
-
-## Send your first email — no DNS setup
-
-Every account can send test email right away from a **sandbox domain**: pre-verified, DKIM and SPF already set.
-It delivers only to addresses you confirm.
-
-The examples use the API client of the package (see the configuration above).
-
-**1. Get your sandbox domain** (`domain/get-sandbox-domain`). The call creates the domain on first use and returns the same one afterwards.
-
-```go
-import (
-	"fmt"
-	"net/http"
-
-	unionewrapper "github.com/unione-repo/unione-nethttp"
-)
-
-mux.HandleFunc("/sandbox-domain", func(w http.ResponseWriter, r *http.Request) {
-	client := unionewrapper.ClientFromContext(r.Context())
-	response, err := client.Domain.GetSandboxDomain(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	fmt.Fprintln(w, response.Domain)
-})
-```
-
-**2. Confirm your inbox** (`confirmed-email/create`). UniOne sends a confirmation email; click the link in it within 48 hours.
-
-```go
-import (
-	"fmt"
-	"net/http"
-
-	"github.com/unione-repo/unione-go-sdk/api/confirmedemail"
-	unionewrapper "github.com/unione-repo/unione-nethttp"
-)
-
-mux.HandleFunc("/confirm-email", func(w http.ResponseWriter, r *http.Request) {
-	client := unionewrapper.ClientFromContext(r.Context())
-	response, err := client.ConfirmedEmail.Create(r.Context(), &confirmedemail.ConfirmedEmailRequest{
-		Email: "you@example.com",
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	fmt.Fprintln(w, response.Status)
-})
-```
-
-Check the status with `confirmed-email/list` — your address should show `"status": "confirmed"`.
-
-**3. Send the email** (`email/send`) from any address on the sandbox domain to the confirmed address.
-
-```go
-import (
-	"fmt"
-	"net/http"
-
-	unione "github.com/unione-repo/unione-go-sdk"
-	"github.com/unione-repo/unione-go-sdk/api/email"
-	"github.com/unione-repo/unione-go-sdk/common"
-	unionewrapper "github.com/unione-repo/unione-nethttp"
-)
-
-mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
-	client := unionewrapper.ClientFromContext(r.Context())
-	response, err := client.Email.Send(r.Context(), &email.EmailSendRequest{
-		Message: &email.MessageObject{
-			Recipients: []email.MessageObjectRecipientsItem{
-				{
-					Email: "you@example.com",
-				},
-			},
-			Body: &common.BodyObject{
-				HTML: unione.String("<p>It works!</p>"),
-			},
-			Subject:   "Hello from UniOne",
-			FromEmail: unione.String("noreply@<sandbox-domain>"),
-		},
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	fmt.Fprintln(w, response.JobID)
-})
-```
-
-### What you get back
-
-```json
-{
-  "status": "success",
-  "job_id": "1ZymBc-00041N-9X",
-  "emails": [
-    "you@example.com"
-  ]
-}
-```
-
-On error the API returns `status: "error"`, a `message` and a numeric `code`:
-
-```json
-{
-  "status": "error",
-  "code": 102,
-  "message": "Error ID:83274F98-C7D5-11F1-B221-6214FF8707B1. Can not decode key wrongkey"
-}
-```
-
-### Same flow with curl
-
-```bash
-BASE=https://api.unione.io/en/transactional/api/v1
-
-curl -s -X POST $BASE/domain/get-sandbox-domain.json \
-  -H "Content-Type: application/json" -H "X-API-KEY: $UNIONE_API_KEY" -d '{}'
-
-curl -s -X POST $BASE/confirmed-email/create.json \
-  -H "Content-Type: application/json" -H "X-API-KEY: $UNIONE_API_KEY" \
-  -d '{"email": "you@example.com"}'
-
-curl -s -X POST $BASE/email/send.json \
-  -H "Content-Type: application/json" -H "X-API-KEY: $UNIONE_API_KEY" \
-  -d '{
-        "message": {
-          "recipients": [
-            {
-              "email": "you@example.com"
-            }
-          ],
-          "from_email": "noreply@<sandbox-domain>",
-          "subject": "Hello from UniOne",
-          "body": {
-            "html": "<p>It works!</p>"
-          }
-        }
-      }'
-```
 
 ## Webhooks
 
@@ -221,6 +71,8 @@ e.Any(cfg.Path(), echo.WrapHandler(handler)) // echo
 
 Register the URL of the endpoint with `webhook/set`, e.g. `https://example.com/unione/webhook`.
 
+> **Answer 200 within 3 seconds** and process the events in the background (a queue): otherwise UniOne repeats the request every 10 minutes for 24 hours (`retry_count` grows), and a handler that failed every request for at least 10 events of a day is turned inactive. The handler must take at least **5 parallel requests of up to 100 events each**; deduplicate, a repeat delivers the same events again.
+
 ## API client
 
 Every section of the API is available on the client, see the [SDK docs](https://github.com/unione-repo/unione-go-sdk).
@@ -248,13 +100,12 @@ mux.HandleFunc("/usage", func(w http.ResponseWriter, r *http.Request) {
 http.ListenAndServe(":8080", unionewrapper.ClientMiddleware(client)(mux))
 ```
 
-## Sending through the API
+### Sending through the API
 
 The client calls [email/send](https://docs.unione.io/en/web-api-ref#email-send) with all of its options: templates, substitutions, metadata, tracking. Fields of the request and other examples: [Go SDK docs](https://github.com/unione-repo/unione-go-sdk/blob/HEAD/docs/Email.md#send).
 
 ```go
 import (
-	"fmt"
 	"net/http"
 
 	unione "github.com/unione-repo/unione-go-sdk"
@@ -264,36 +115,76 @@ import (
 )
 
 mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
-	client := unionewrapper.ClientFromContext(r.Context())
-	response, err := client.Email.Send(r.Context(), &email.EmailSendRequest{
+	ctx := r.Context()
+	client := unionewrapper.ClientFromContext(ctx)
+
+	if _, err := client.Email.Send(ctx, &email.EmailSendRequest{
 		Message: &email.MessageObject{
-			Recipients: []email.MessageObjectRecipientsItem{
-				{
-					Email: "user@example.com",
-					Substitutions: map[string]string{
-						"CustomerId": "12452",
-						"to_name":    "John Smith",
-					},
-				},
-			},
-			Body: &common.BodyObject{
-				HTML:      unione.String("<b>Hello, {{to_name}}</b>"),
-				Plaintext: unione.String("Hello, {{to_name}}"),
-			},
-			Subject:   "UniOne test email ",
-			FromEmail: unione.String("email@example.com"),
-			FromName:  unione.String("John Smith"),
+			Recipients: []email.MessageObjectRecipientsItem{email.RecipientFromAddress("Alex <alex@example.com>")},
+			FromEmail:  unione.String("shop@example.com"),
+			FromName:   unione.String("Shop"),
+			Subject:    "Your order",
+			Body:       common.HTMLBody("<p>Hello, {{to_name}}! Your order has shipped.</p>"),
 		},
-	})
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+})
+```
+
+## No domain yet: the test sandbox domain
+
+Until your domain is verified, send from the **sandbox domain**: a test domain every account has, already verified, with DKIM and SPF set. It delivers only to addresses you confirm (the confirmation link comes by email, valid 48 hours), up to 100 emails a day. The sandbox domain is deleted 31 days after it was created, but you can get it again: the next `domain/get-sandbox-domain` call creates a new one (with a new name, so read it from the call, do not hardcode it).
+
+The examples use the API client of the package (see the configuration above).
+
+```go
+import (
+	"net/http"
+
+	unione "github.com/unione-repo/unione-go-sdk"
+	"github.com/unione-repo/unione-go-sdk/api/confirmedemail"
+	"github.com/unione-repo/unione-go-sdk/api/email"
+	"github.com/unione-repo/unione-go-sdk/common"
+	unionewrapper "github.com/unione-repo/unione-nethttp"
+)
+
+mux.HandleFunc("/sandbox", func(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	client := unionewrapper.ClientFromContext(ctx)
+
+	// 1. Your sandbox domain: created on the first call, the same one afterwards
+	sandbox, err := client.Domain.GetSandboxDomain(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	fmt.Fprintln(w, response.JobID)
+
+	// 2. Confirm your inbox: UniOne sends a link, click it within 48 hours
+	confirm := &confirmedemail.ConfirmedEmailRequest{Email: "you@example.com"}
+	if _, err := client.ConfirmedEmail.Create(ctx, confirm); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	// 3. Send from any address on the sandbox domain to the confirmed one
+	if _, err := client.Email.Send(ctx, &email.EmailSendRequest{
+		Message: &email.MessageObject{
+			Recipients: []email.MessageObjectRecipientsItem{email.RecipientFromAddress("you@example.com")},
+			FromEmail:  unione.String("noreply@" + sandbox.Domain),
+			Subject:    "Hello from UniOne",
+			Body:       common.HTMLBody("<p>It works!</p>"),
+		},
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
 })
 ```
 
-## Sandbox limits
+<details>
+<summary>Sandbox limits</summary>
 
 - Sends only to confirmed addresses: up to 10 per account.
 - Up to 100 emails a day.
@@ -303,39 +194,68 @@ mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
 
 The sandbox is for development and testing. Do not use a sandbox domain as the sender in production.
 
-## Before production: verify your domain
+</details>
 
-1. `domain/get-dns-records` — returns the values for your DNS records.
-2. Add these records at your DNS provider (the domain page of the control panel shows them too):
+<details>
+<summary>The same with curl</summary>
 
-   | Type | Host | Value |
-   |---|---|---|
-   | TXT | `@` | the `verification-record` value (`unione-validate-hash=…`) |
-   | TXT | `<selector>._domainkey` (the selector is on the domain page of the control panel, e.g. `us`) | `v=DKIM1; k=rsa; p=<dkim>` |
-   | TXT | `@` | `v=spf1 include:spf.unione.io ~all` |
-   | CNAME | `_dmarc` | the `dmarc` value |
+```bash
+BASE=https://api.unione.io/en/transactional/api/v1
 
-3. `domain/validate-verification-record`, then `domain/validate-dkim`.
-4. `domain/list` — wait until the verification record is confirmed and DKIM is active.
-5. Read `from_email` from your config, so switching from the sandbox needs no code change.
+curl -s -X POST $BASE/domain/get-sandbox-domain.json \
+  -H "Content-Type: application/json" -H "X-API-KEY: $UNIONE_API_KEY" -d '{}'
 
-## Sending reliably
+curl -s -X POST $BASE/confirmed-email/create.json \
+  -H "Content-Type: application/json" -H "X-API-KEY: $UNIONE_API_KEY" \
+  -d '{"email": "you@example.com"}'
 
-- **Retries:** set `message.idempotence_key` on sends that may be retried, so a repeated request does not send twice.
-- **Limits:** up to 500 recipients and 10 MB per request; each attachment up to 7 MB.
-- **Body:** always include `body.html` or `body.plaintext`.
-- **Delivery status:** register a webhook (`webhook/set`) with a fast, idempotent HTTPS handler instead of polling.
-- **Defaults:** keep the default unsubscribe footer and tracking; changing them requires UniOne support.
-- **Errors:** retry `429` and `5xx` with backoff; do not retry other errors unchanged.
+curl -s -X POST $BASE/email/send.json \
+  -H "Content-Type: application/json" -H "X-API-KEY: $UNIONE_API_KEY" \
+  -d '{
+        "message": {
+          "recipients": [
+            {
+              "email": "you@example.com"
+            }
+          ],
+          "from_email": "noreply@<sandbox-domain>",
+          "subject": "Hello from UniOne",
+          "body": {
+            "html": "<p>It works!</p>"
+          }
+        }
+      }'
+```
 
-## Links
+</details>
 
-- [Send emails with Go](https://docs.unione.io/en/send-with-go) and other [integration guides](https://docs.unione.io/en/integrations/)
-- [Web API reference](https://docs.unione.io/en/web-api-ref)
-- [llms.txt](https://docs.unione.io/llms.txt) for AI coding agents
-- [UniOne MCP server and agent setup](https://unione.io/en/agents)
-- [Support](https://cp.unione.io/en/support)
+## Going to production
 
-## For package contributors
+**1. Verify your sending domain.** `domain/get-dns-records` returns the verification record, the DKIM key and the DMARC target; add the records at your DNS provider, then `domain/validate-verification-record` and `domain/validate-dkim`.
 
-See [AGENTS.md](AGENTS.md): how this package is generated from the OpenAPI spec, built, tested and released.
+| Type | Host | Value | Where it comes from |
+|---|---|---|---|
+| TXT | `@` | `unione-validate-hash=…` | `verification-record` of the response, as is |
+| TXT | `<selector>._domainkey` (the selector is on the domain page of the control panel, e.g. `us`) | `v=DKIM1; k=rsa; p=<dkim>` | `dkim` of the response after `v=DKIM1; k=rsa; p=` |
+| TXT | `@` | `v=spf1 include:spf.unione.io ~all` | not in the response; add the include to your SPF record if you have one |
+| CNAME | `_dmarc` | `<domain>.dmarc.…` | `dmarc` of the response (UniOne publishes the DMARC policy); keep your own DMARC TXT record instead if the domain has one |
+
+**2. Make sending reliable.**
+
+| | |
+|---|---|
+| Retries | `429` and `5xx` with backoff and the same `idempotence_key`; fix other errors instead of retrying |
+| Limits | 500 recipients and 10 MB per request, attachments included: base64 makes a file about a third larger |
+| Body | always `html` or `plaintext` (a template can supply it) |
+| Delivery status | a webhook, not polling |
+| Queue | send from a background job, not inside the web request |
+| Config | `from_email` from config, so the sandbox → production switch needs no code change |
+| Defaults | keep the unsubscribe footer and tracking; changing them needs UniOne support |
+
+## Help
+
+- [Integration guides](https://docs.unione.io/en/integrations)
+- [Go SDK](https://github.com/unione-repo/unione-go-sdk)
+- AI coding agents: [llms.txt](https://docs.unione.io/llms.txt), the [MCP server](https://unione.io/en/agents), skills: `npx skills add https://github.com/unione-repo/unione-skills.git`
+- [Support](https://cp.unione.io/en/support) · [Issues](https://github.com/unione-repo/unione-nethttp/issues)
+- Contributing: [AGENTS.md](AGENTS.md) — the package is generated from the OpenAPI spec.
