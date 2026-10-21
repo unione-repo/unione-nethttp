@@ -14,7 +14,7 @@ import (
 )
 
 // Platform is the package and its version in the "platform" query parameter of the requests, before the SDK one.
-const Platform = "nethttp.1.2.3"
+const Platform = "nethttp.1.2.4"
 
 // Environment variables read by ConfigFromEnv.
 const (
