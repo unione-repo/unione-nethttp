@@ -2,6 +2,12 @@
 
 All notable changes of this package. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.3](https://github.com/unione-repo/unione-nethttp/releases/tag/v1.3.3) - 2026-11-05
+
+### Fixed
+
+- The tests of the CI workflow failed with "missing go.sum entry": the installation step writes go.sum (go mod tidy).
+
 ## [1.3.2](https://github.com/unione-repo/unione-nethttp/releases/tag/v1.3.2) - 2026-11-05
 
 ### Fixed

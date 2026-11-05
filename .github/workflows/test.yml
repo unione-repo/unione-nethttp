@@ -47,8 +47,12 @@ jobs:
         timeout-minutes: 15
         run: |
           for i in $(seq 1 20); do
-            if ( go mod download ); then exit 0; fi
-            echo "the dependencies can not be installed yet ($i/20)"; sleep 30
+            if ( go mod tidy ) > /tmp/install.log 2>&1; then cat /tmp/install.log; exit 0; fi
+            cat /tmp/install.log
+            if ! grep -qiF 'github.com/unione-repo/unione-go-sdk' /tmp/install.log; then
+              echo "::error::the dependencies can not be installed, not because of the SDK github.com/unione-repo/unione-go-sdk: see above"; exit 1
+            fi
+            echo "the dependencies can not be installed yet: the SDK github.com/unione-repo/unione-go-sdk ($i/20)"; sleep 30
           done
           echo "::error::the dependencies (the SDK) can not be installed in 10 min"; exit 1
       - run: |
