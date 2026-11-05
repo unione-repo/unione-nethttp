@@ -92,7 +92,7 @@ mux := http.NewServeMux()
 mux.HandleFunc("/usage", func(w http.ResponseWriter, r *http.Request) {
 	info, err := unionewrapper.ClientFromContext(r.Context()).System.Info(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		unionewrapper.WriteError(w, err)
 		return
 	}
 	fmt.Fprintln(w, info.Email)
@@ -127,11 +127,15 @@ mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
 			Body:       common.HTMLBody("<p>Hello, {{to_name}}! Your order has shipped.</p>"),
 		},
 	}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		unionewrapper.WriteError(w, err)
 		return
 	}
 })
 ```
+
+### Errors
+
+The API client returns the SDK `*client.APIError` (`errors.As`): `Kind` tells what failed (api, network, timeout, invalid_response, invalid_request), `Retryable()` whether a repeat may succeed (network, timeout, HTTP 429 and 5xx), `Hint` how to fix an API error and `APIMessage` the message of the API. In a handler `WriteError(w, err)` answers a failed call: 500 for `KindInvalidRequest`, 504 for `KindTimeout`, 502 for the others, with the generic body "email sending failed"; the error itself goes to the log, not to the client.
 
 ## No domain yet: the test sandbox domain
 
@@ -157,14 +161,14 @@ mux.HandleFunc("/sandbox", func(w http.ResponseWriter, r *http.Request) {
 	// 1. Your sandbox domain: created on the first call, the same one afterwards
 	sandbox, err := client.Domain.GetSandboxDomain(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		unionewrapper.WriteError(w, err)
 		return
 	}
 
 	// 2. Confirm your inbox: UniOne sends a link, click it within 48 hours
 	confirm := &confirmedemail.ConfirmedEmailRequest{Email: "you@example.com"}
 	if _, err := client.ConfirmedEmail.Create(ctx, confirm); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		unionewrapper.WriteError(w, err)
 		return
 	}
 
@@ -177,7 +181,7 @@ mux.HandleFunc("/sandbox", func(w http.ResponseWriter, r *http.Request) {
 			Body:       common.HTMLBody("<p>It works!</p>"),
 		},
 	}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		unionewrapper.WriteError(w, err)
 		return
 	}
 })
